@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TetraSnake</title>
+    <!-- Load Tailwind CSS for styling the container and interface -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles for the game grid and retro aesthetic */
+        :root {
+            --grid-size: 20; /* Grid size in pixels for the canvas blocks */
+            --game-width-blocks: 15;
+            --game-height-blocks: 30;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0d1117; /* Dark background */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 1rem;
+        }
+
+        #game-container {
+            width: 100%;
+            max-width: 400px; /* Max width for mobile friendliness */
+            background-color: #161b22;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            border: 8px solid #30363d;
+            border-radius: 12px;
+            padding: 1rem;
+        }
+
+        #gameCanvas {
+            border: 2px solid #58a6ff; /* Light blue border for the grid */
+            background-color: #010409; /* Very dark grid background */
+            image-rendering: pixelated; /* Retro look for blocks */
+            display: block;
+            margin: 0 auto;
+        }
+
+        /* Styling for the control buttons (Crucial for mobile play) */
+        .game-button {
+            transition: all 0.1s ease;
+            box-shadow: 0 4px 0 #005cc5; /* Darker blue shadow */
+            cursor: pointer;
+            user-select: none;
+            touch-action: manipulation;
+        }
+
+        .game-button:active {
+            box-shadow: 0 0 0 #005cc5;
+            transform: translateY(4px);
+        }
+
+        /* D-Pad Styling for touch control */
+        #dpad-controls {
+            display: grid;
+            grid-template-areas: ". up ." "left rotate right" ". down .";
+            width: 150px;
+            height: 150px;
+        }
+        #dpad-controls button {
+            border-radius: 8px;
+            margin: 4px;
+            font-size: 1.25rem;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        #btn-up { grid-area: up; }
+        #btn-left { grid-area: left; }
+        #btn-right { grid-area: right; }
+        #btn-down { grid-area: down; }
+        #btn-rotate { grid-area: rotate; }
+    </style>
+</head>
+<body class="selection:bg-blue-600 selection:text-white">
+
+<div id="game-container" class="flex flex-col items-center">
+    <h1 class="text-3xl font-extrabold text-white mb-2 tracking-wider">TetraSnake</h1>
+    <div id="score-board" class="flex justify-between w-full p-2 mb-4 text-white text-lg font-mono bg-gray-800 rounded-lg">
+        <span id="score" class="text-green-400">Score: 0</span>
+        <span id="length" class="text-yellow-400">Length: 3</span>
+    </div>
+
+    <canvas id="gameCanvas" width="300" height="600" class="w-full h-auto max-h-[60vh]"></canvas>
+
+    <div id="message-box" class="mt-4 p-3 bg-red-800 text-white font-bold rounded-lg hidden w-full text-center">
+        GAME OVER - Press START
+    </div>
+
+    <button id="startButton" class="game-button mt-4 px-8 py-3 w-full max-w-xs text-xl font-bold bg-green-600 text-white rounded-lg hover:bg-green-700">
+        START GAME
+    </button>
+
+    <!-- Mobile Controls (D-Pad) -->
+    <div id="mobile-controls" class="mt-6 flex flex-col items-center">
+        <h2 class="text-white text-sm uppercase opacity-75 mb-2">Controls: Arrows/WASD + Space/E (Rotate)</h2>
+        <div id="dpad-controls">
+            <button id="btn-up" class="game-button bg-blue-500 hover:bg-blue-600 text-white" data-action="UP">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="3" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 10.5 12 3m0 0 7.5 7.5M12 3v18" /></svg>
+            </button>
+            <button id="btn-left" class="game-button bg-blue-500 hover:bg-blue-600 text-white" data-action="LEFT">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="3" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" /></svg>
+            </button>
+            <button id="btn-rotate" class="game-button bg-yellow-500 hover:bg-yellow-600 text-gray-800 font-bold text-sm" data-action="ROTATE">
+                ROT
+            </button>
+            <button id="btn-right" class="game-button bg-blue-500 hover:bg-blue-600 text-white" data-action="RIGHT">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="3" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" /></svg>
+            </button>
+            <button id="btn-down" class="game-button bg-blue-500 hover:bg-blue-600 text-white" data-action="DOWN">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="3" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 13.5 12 21m0 0-7.5-7.5M12 21V3" /></svg>
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- Configuration and Constants ---
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const scoreElement = document.getElementById('score');
+    const lengthElement = document.getElementById('length');
+    const startButton = document.getElementById('startButton');
+    const messageBox = document.getElementById('message-box');
+
+    // Game constants
+    const GRID_SIZE = 20; // Pixel size of one grid block
+    const WIDTH_BLOCKS = 15; // Game width in blocks
+    const HEIGHT_BLOCKS = 30; // Game height in blocks
+    const GAME_SPEED_MS = 150; // Initial game speed
+
+    // Colors
+    const COLOR_SNAKE_HEAD = '#38a169'; // Green
+    const COLOR_SNAKE_BODY = '#68d391'; // Lighter Green
+    const COLOR_OBSTACLE = '#a0aec0';   // Gray/Slate (Settled Tetrominoes)
+    const COLOR_ACTIVE_TETRA = {
+        I: '#00ffff', O: '#ffff00', T: '#800080', J: '#0000ff',
+        L: '#ff7f00', S: '#00ff00', Z: '#ff0000'
+    };
+    const COLOR_GRID_LINES = '#333';
+
+    // Tetromino shapes (coordinates relative to origin [0,0])
+    const TETROMINOES = [
+        { name: 'I', shape: [[-1, 0], [0, 0], [1, 0], [2, 0]] },
+        { name: 'O', shape: [[0, 0], [1, 0], [0, 1], [1, 1]] },
+        { name: 'T', shape: [[0, 0], [-1, 0], [1, 0], [0, 1]] },
+        { name: 'J', shape: [[-1, 0], [0, 0], [1, 0], [1, 1]] },
+        { name: 'L', shape: [[-1, 0], [0, 0], [1, 0], [-1, 1]] },
+        { name: 'S', shape: [[0, 0], [1, 0], [-1, 1], [0, 1]] },
+        { name: 'Z', shape: [[0, 0], [-1, 0], [0, 1], [1, 1]] }
+    ];
+
+    // Directions
+    const DIRECTION_VECTORS = {
+        'UP': { x: 0, y: -1 },
+        'DOWN': { x: 0, y: 1 },
+        'LEFT': { x: -1, y: 0 },
+        'RIGHT': { x: 1, y: 0 }
+    };
+
+    // --- Game State Variables ---
+    let gameInterval;
+    let isGameRunning = false;
+    let snake;
+    let direction;
+    let nextDirection;
+    let score;
+    let grid;
+    let activeTetromino;
+
+    // --- Utility Functions ---
+
+    /**
+     * Initializes the canvas dimensions and handles responsiveness.
+     */
+    function setupCanvas() {
+        const container = document.getElementById('game-container');
+        const containerWidth = container.clientWidth - 32;
+        
+        // Calculate block size based on container width
+        const blockSize = Math.floor(containerWidth / WIDTH_BLOCKS);
+        
+        // Ensure minimum block size
+        const finalBlockSize = Math.max(blockSize, 10);
+        
+        // Set canvas dimensions
+        canvas.width = finalBlockSize * WIDTH_BLOCKS;
+        canvas.height = finalBlockSize * HEIGHT_BLOCKS;
+        
+        // Reset transformation matrix
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        
+        // Scale drawing to match the actual pixel size
+        ctx.scale(finalBlockSize / GRID_SIZE, finalBlockSize / GRID_SIZE);
+        
+        // Store the current block size for reference
+        canvas.currentBlockSize = finalBlockSize;
+    }
+
+    /**
+     * Creates and returns an empty game grid.
+     */
+    function createGrid() {
+        const grid = [];
+        for (let y = 0; y < HEIGHT_BLOCKS; y++) {
+            grid[y] = new Array(WIDTH_BLOCKS).fill(0);
+        }
+        return grid;
+    }
+
+    /**
+     * Spawns a new random active tetromino at the top center.
+     */
+    function spawnTetromino() {
+        const pieceData = TETROMINOES[Math.floor(Math.random() * TETROMINOES.length)];
+        activeTetromino = {
+            x: Math.floor(WIDTH_BLOCKS / 2),
+            y: 1,
+            shape: pieceData.shape.map(coord => [...coord]),
+            color: COLOR_ACTIVE_TETRA[pieceData.name],
+            name: pieceData.name
+        };
+    }
+
+    /**
+     * Checks if a position (x, y) is within bounds or hits a solid obstacle.
+     */
+    function isSafe(x, y) {
+        // Check bounds
+        if (x < 0 || x >= WIDTH_BLOCKS || y < 0 || y >= HEIGHT_BLOCKS) {
+            return false;
+        }
+        // Check for solid obstacle
+        if (grid[y] && grid[y][x] === 1) {
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Checks if the snake's head hits its own body.
+     */
+    function checkSelfCollision(headX, headY) {
+        for (let i = 1; i < snake.length; i++) {
+            if (snake[i].x === headX && snake[i].y === headY) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Adds the active tetromino blocks to the grid as solid obstacles.
+     */
+    function settleTetromino() {
+        activeTetromino.shape.forEach(block => {
+            const x = activeTetromino.x + block[0];
+            const y = activeTetromino.y + block[1];
+
+            if (x >= 0 && x < WIDTH_BLOCKS && y >= 0 && y < HEIGHT_BLOCKS) {
+                grid[y][x] = 1;
+            }
+        });
+        activeTetromino = null;
+        spawnTetromino();
+        checkLineClears();
+    }
+
+    /**
+     * Checks for full lines of obstacles and clears them, shifting blocks down.
+     */
+    function checkLineClears() {
+        let linesCleared = 0;
+        let newGrid = [];
+
+        for (let y = HEIGHT_BLOCKS - 1; y >= 0; y--) {
+            const isLineFull = grid[y].every(cell => cell === 1);
+
+            if (isLineFull) {
+                linesCleared++;
+            } else {
+                newGrid.unshift(grid[y]);
+            }
+        }
+
+        if (linesCleared > 0) {
+            for (let i = 0; i < linesCleared; i++) {
+                newGrid.unshift(new Array(WIDTH_BLOCKS).fill(0));
+            }
+
+            grid = newGrid;
+            score += linesCleared * 100 * linesCleared;
+            updateScore();
+        }
+    }
+    
+    /**
+     * Rotates the active tetromino 90 degrees clockwise if the resulting position is valid.
+     */
+    function rotateTetromino() {
+        if (!isGameRunning || !activeTetromino || activeTetromino.name === 'O') return;
+
+        const newShape = activeTetromino.shape.map(block => [block[1], -block[0]]);
+        
+        const isValidRotation = newShape.every(block => {
+            const x = activeTetromino.x + block[0];
+            const y = activeTetromino.y + block[1];
+            return isSafe(x, y);
+        });
+
+        if (isValidRotation) {
+            activeTetromino.shape = newShape;
+            drawGame();
+        }
+    }
+
+    /**
+     * The main function to handle game logic updates.
+     */
+    function gameLoop() {
+        if (!isGameRunning) return;
+
+        // Update Direction
+        direction = nextDirection;
+        const dirVector = DIRECTION_VECTORS[direction];
+
+        // Calculate New Head Position
+        const head = snake[0];
+        const newHead = { x: head.x + dirVector.x, y: head.y + dirVector.y };
+
+        // Collision Checks
+        if (!isSafe(newHead.x, newHead.y) || checkSelfCollision(newHead.x, newHead.y)) {
+            gameOver();
+            return;
+        }
+
+        // Move Snake
+        snake.unshift(newHead);
+
+        // Tetromino Consumption
+        let didEat = false;
+        if (activeTetromino) {
+            const consumedBlockIndex = activeTetromino.shape.findIndex(block => {
+                const tetraX = activeTetromino.x + block[0];
+                const tetraY = activeTetromino.y + block[1];
+                return newHead.x === tetraX && newHead.y === tetraY;
+            });
+
+            if (consumedBlockIndex !== -1) {
+                activeTetromino.shape.splice(consumedBlockIndex, 1);
+                score += 10;
+                didEat = true;
+            }
+        }
+
+        // Snake Length Management
+        if (!didEat) {
+            snake.pop();
+        }
+        
+        updateScore();
+
+        // Tetromino Falling and Settling
+        if (activeTetromino) {
+            const shouldSettle = activeTetromino.shape.some(block => {
+                const nextY = activeTetromino.y + block[1] + 1;
+                const nextX = activeTetromino.x + block[0];
+                
+                if (nextY >= HEIGHT_BLOCKS) return true;
+                if (grid[nextY] && grid[nextY][nextX] === 1) return true;
+                
+                return false;
+            });
+
+            if (shouldSettle) {
+                settleTetromino();
+            } else {
+                activeTetromino.y++;
+            }
+
+            if (activeTetromino && activeTetromino.shape.length === 0) {
+                activeTetromino = null;
+                spawnTetromino();
+            }
+        } else {
+            spawnTetromino();
+        }
+
+        drawGame();
+    }
+
+    // --- Drawing Functions ---
+
+    /**
+     * Draws a single grid block.
+     */
+    function drawBlock(x, y, color) {
+        ctx.fillStyle = color;
+        ctx.fillRect(x * GRID_SIZE, y * GRID_SIZE, GRID_SIZE, GRID_SIZE);
+
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x * GRID_SIZE + 1, y * GRID_SIZE + 1, GRID_SIZE - 2, GRID_SIZE - 2);
+    }
+
+    /**
+     * Clears the canvas and draws the entire game state.
+     */
+    function drawGame() {
+        // Clear the canvas using current dimensions
+        const blockSize = canvas.currentBlockSize || GRID_SIZE;
+        const scaledWidth = WIDTH_BLOCKS * GRID_SIZE;
+        const scaledHeight = HEIGHT_BLOCKS * GRID_SIZE;
+        
+        ctx.clearRect(0, 0, scaledWidth, scaledHeight);
+
+        // Draw Grid Lines
+        ctx.strokeStyle = COLOR_GRID_LINES;
+        ctx.lineWidth = 0.5;
+        for (let x = 0; x <= WIDTH_BLOCKS; x++) {
+            ctx.beginPath();
+            ctx.moveTo(x * GRID_SIZE, 0);
+            ctx.lineTo(x * GRID_SIZE, scaledHeight);
+            ctx.stroke();
+        }
+        for (let y = 0; y <= HEIGHT_BLOCKS; y++) {
+            ctx.beginPath();
+            ctx.moveTo(0, y * GRID_SIZE);
+            ctx.lineTo(scaledWidth, y * GRID_SIZE);
+            ctx.stroke();
+        }
+
+        // Draw Solid Obstacles
+        for (let y = 0; y < HEIGHT_BLOCKS; y++) {
+            for (let x = 0; x < WIDTH_BLOCKS; x++) {
+                if (grid[y][x] === 1) {
+                    drawBlock(x, y, COLOR_OBSTACLE);
+                }
+            }
+        }
+
+        // Draw Active Tetromino
+        if (activeTetromino) {
+            activeTetromino.shape.forEach(block => {
+                drawBlock(
+                    activeTetromino.x + block[0],
+                    activeTetromino.y + block[1],
+                    activeTetromino.color
+                );
+            });
+        }
+
+        // Draw Snake
+        snake.forEach((segment, index) => {
+            const color = index === 0 ? COLOR_SNAKE_HEAD : COLOR_SNAKE_BODY;
+            drawBlock(segment.x, segment.y, color);
+        });
+    }
+
+    /**
+     * Updates the score and length display elements.
+     */
+    function updateScore() {
+        scoreElement.textContent = `Score: ${score}`;
+        lengthElement.textContent = `Length: ${snake.length}`;
+    }
+
+    // --- Game Flow Control ---
+
+    /**
+     * Initializes the game state.
+     */
+    function initializeGame() {
+        snake = [
+            { x: Math.floor(WIDTH_BLOCKS / 4), y: Math.floor(HEIGHT_BLOCKS / 2) },
+            { x: Math.floor(WIDTH_BLOCKS / 4) - 1, y: Math.floor(HEIGHT_BLOCKS / 2) },
+            { x: Math.floor(WIDTH_BLOCKS / 4) - 2, y: Math.floor(HEIGHT_BLOCKS / 2) }
+        ];
+        direction = 'RIGHT';
+        nextDirection = 'RIGHT';
+        score = 0;
+        grid = createGrid();
+        activeTetromino = null;
+
+        messageBox.classList.add('hidden');
+        startButton.textContent = 'RESTART';
+        startButton.disabled = false;
+        
+        spawnTetromino();
+        updateScore();
+        drawGame();
+    }
+
+    /**
+     * Starts the game loop.
+     */
+    function startGame() {
+        if (isGameRunning) {
+            clearInterval(gameInterval);
+        }
+        
+        initializeGame();
+        isGameRunning = true;
+        gameInterval = setInterval(gameLoop, GAME_SPEED_MS);
+    }
+
+    /**
+     * Ends the game and displays the final score.
+     */
+    function gameOver() {
+        isGameRunning = false;
+        clearInterval(gameInterval);
+        messageBox.textContent = `GAME OVER! Final Score: ${score}`;
+        messageBox.classList.remove('hidden');
+        startButton.textContent = 'PLAY AGAIN';
+    }
+
+    // --- Event Handlers ---
+
+    /**
+     * Handles keyboard input for snake direction and rotation.
+     */
+    function handleKeyDown(e) {
+        if (!isGameRunning) return;
+
+        let newDir;
+        switch (e.key) {
+            case 'ArrowUp':
+            case 'w':
+                newDir = 'UP';
+                break;
+            case 'ArrowDown':
+            case 's':
+                newDir = 'DOWN';
+                break;
+            case 'ArrowLeft':
+            case 'a':
+                newDir = 'LEFT';
+                break;
+            case 'ArrowRight':
+            case 'd':
+                newDir = 'RIGHT';
+                break;
+            case ' ':
+            case 'e':
+                rotateTetromino();
+                return;
+            default:
+                return;
+        }
+
+        const currentVector = DIRECTION_VECTORS[direction];
+        const newVector = DIRECTION_VECTORS[newDir];
+
+        if (currentVector.x !== -newVector.x || currentVector.y !== -newVector.y) {
+            nextDirection = newDir;
+        }
+    }
+
+    /**
+     * Handles mobile D-pad input.
+     */
+    function handleDpadClick(e) {
+        const button = e.target.closest('button');
+        if (!button || !button.dataset.action) return;
+
+        const action = button.dataset.action;
+
+        if (action === 'ROTATE') {
+            rotateTetromino();
+            return;
+        }
+
+        const newDir = action;
+        const currentVector = DIRECTION_VECTORS[direction];
+        const newVector = DIRECTION_VECTORS[newDir];
+
+        if (currentVector.x !== -newVector.x || currentVector.y !== -newVector.y) {
+            nextDirection = newDir;
+        }
+    }
+
+    // --- Initialization ---
+
+    window.onload = function() {
+        setupCanvas();
+        
+        startButton.addEventListener('click', startGame);
+        document.addEventListener('keydown', handleKeyDown);
+        
+        document.getElementById('dpad-controls').querySelectorAll('button').forEach(button => {
+            button.addEventListener('click', handleDpadClick);
+        });
+
+        initializeGame();
+        window.addEventListener('resize', setupCanvas);
+    };
+</script>
+
+</body>
+</html>
